@@ -10,11 +10,11 @@ use axum::{
 use serde::{Deserialize, Serialize};
 use tokio::net::TcpListener;
 
-use crate::{pipeline::MacVideoPipeline, webrtc_sender::accept_offer};
+use crate::{pipeline::MediaPipeline, webrtc_sender::accept_offer};
 
 #[derive(Clone)]
 pub struct AppState {
-    pub pipeline: Arc<MacVideoPipeline>,
+    pub pipeline: Arc<MediaPipeline>,
 }
 
 pub struct ServerConfig {
@@ -34,6 +34,7 @@ impl ServerConfig {
 #[derive(Serialize)]
 pub struct HealthResponse {
     status: &'static str,
+    source: &'static str,
     pipeline_ready: bool,
     raw_frames: u64,
     encode_attempts: u64,
@@ -83,6 +84,7 @@ pub async fn health_handler(State(state): State<AppState>) -> Json<HealthRespons
     let health = state.pipeline.health();
     Json(HealthResponse {
         status: "ok",
+        source: health.source,
         pipeline_ready: health.pipeline_ready,
         raw_frames: health.raw_frames,
         encode_attempts: health.encode_attempts,

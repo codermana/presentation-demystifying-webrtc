@@ -42,6 +42,22 @@ pub fn sample_buffer_to_access_unit(
     })
 }
 
+pub fn parse_annex_b_access_units(
+    bytes: &[u8],
+    duration: Duration,
+) -> Result<Vec<EncodedAccessUnit>, String> {
+    let nal_units = split_annex_b_nals(bytes);
+    if nal_units.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    if nal_units.iter().any(|nal| nal_unit_type(nal) == Some(9)) {
+        return parse_access_units_from_aud(&nal_units, duration);
+    }
+
+    parse_access_units_without_aud(&nal_units, duration)
+}
+
 fn nal_unit_header_length(format_description: &CMFormatDescription) -> Result<usize, String> {
     let mut nal_header_length = 0_i32;
     let status = unsafe {
@@ -129,6 +145,122 @@ fn append_avcc_nals_as_annex_b(
     }
 
     Ok(())
+}
+
+fn split_annex_b_nals(bytes: &[u8]) -> Vec<Vec<u8>> {
+    let mut nal_units = Vec::new();
+    let mut cursor = 0_usize;
+
+    while let Some(start) = find_start_code(bytes, cursor) {
+        let nal_start = start + start_code_len(bytes, start);
+        let Some(next_start) = find_start_code(bytes, nal_start) else {
+            if nal_start < bytes.len() {
+                nal_units.push(bytes[nal_start..].to_vec());
+            }
+            break;
+        };
+        if nal_start < next_start {
+            nal_units.push(bytes[nal_start..next_start].to_vec());
+        }
+        cursor = next_start;
+    }
+
+    nal_units
+}
+
+fn parse_access_units_from_aud(
+    nal_units: &[Vec<u8>],
+    duration: Duration,
+) -> Result<Vec<EncodedAccessUnit>, String> {
+    let mut access_units = Vec::new();
+    let mut current = Vec::new();
+
+    for nal in nal_units {
+        if nal_unit_type(nal) == Some(9) {
+            if !current.is_empty() {
+                access_units.push(make_access_unit(&current, duration));
+                current.clear();
+            }
+            continue;
+        }
+        current.push(nal.clone());
+    }
+
+    if !current.is_empty() {
+        access_units.push(make_access_unit(&current, duration));
+    }
+
+    if access_units.is_empty() {
+        return Err("Annex-B stream contained AUD markers but no video access units".to_string());
+    }
+
+    Ok(access_units)
+}
+
+fn parse_access_units_without_aud(
+    nal_units: &[Vec<u8>],
+    duration: Duration,
+) -> Result<Vec<EncodedAccessUnit>, String> {
+    let mut access_units = Vec::new();
+    let mut parameter_sets = Vec::new();
+
+    for nal in nal_units {
+        match nal_unit_type(nal) {
+            Some(7 | 8 | 6) => parameter_sets.push(nal.clone()),
+            Some(5) => {
+                let mut grouped = parameter_sets.clone();
+                grouped.push(nal.clone());
+                access_units.push(make_access_unit(&grouped, duration));
+            }
+            Some(1) => access_units.push(make_access_unit(std::slice::from_ref(nal), duration)),
+            Some(_) | None => {}
+        }
+    }
+
+    if access_units.is_empty() {
+        return Err(
+            "unable to derive access units from Annex-B stream; add AUD NALs or provide a simpler H264 elementary stream"
+                .to_string(),
+        );
+    }
+
+    Ok(access_units)
+}
+
+fn make_access_unit(nal_units: &[Vec<u8>], duration: Duration) -> EncodedAccessUnit {
+    let mut data = Vec::new();
+    for nal in nal_units {
+        data.extend_from_slice(&[0, 0, 0, 1]);
+        data.extend_from_slice(nal);
+    }
+
+    EncodedAccessUnit {
+        data: data.into(),
+        duration,
+    }
+}
+
+fn find_start_code(bytes: &[u8], from: usize) -> Option<usize> {
+    let mut cursor = from;
+    while cursor + 3 < bytes.len() {
+        if bytes[cursor..].starts_with(&[0, 0, 1]) || bytes[cursor..].starts_with(&[0, 0, 0, 1]) {
+            return Some(cursor);
+        }
+        cursor += 1;
+    }
+    None
+}
+
+fn start_code_len(bytes: &[u8], start: usize) -> usize {
+    if bytes[start..].starts_with(&[0, 0, 0, 1]) {
+        4
+    } else {
+        3
+    }
+}
+
+fn nal_unit_type(nal: &[u8]) -> Option<u8> {
+    nal.first().map(|byte| byte & 0x1f)
 }
 
 fn parse_nal_length(bytes: &[u8]) -> usize {

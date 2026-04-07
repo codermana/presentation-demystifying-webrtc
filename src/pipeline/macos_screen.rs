@@ -1,10 +1,7 @@
 use std::{
     ptr,
     ptr::NonNull,
-    sync::{
-        atomic::{AtomicBool, AtomicU64, Ordering},
-        mpsc, Arc, Mutex,
-    },
+    sync::{atomic::Ordering, mpsc, Arc, Mutex},
     time::Duration,
 };
 
@@ -35,130 +32,43 @@ use tokio::sync::broadcast;
 
 use crate::h264::{sample_buffer_to_access_unit, EncodedAccessUnit};
 
+use super::{
+    env_i32, now_unix_ms, PipelineStats, DEFAULT_MAX_STREAM_WIDTH,
+    DEFAULT_TARGET_AVERAGE_BITRATE_BPS, DEFAULT_TARGET_FPS,
+};
+
 const SCREEN_CAPTURE_KIT_TIMEOUT: Duration = Duration::from_secs(30);
-const TARGET_FPS: i32 = 15;
-const STARTUP_CHANNEL_CAPACITY: usize = 2;
-const MAX_STREAM_WIDTH: i32 = 1280;
-const TARGET_AVERAGE_BITRATE_BPS: i32 = 5_000_000;
 
-#[derive(Clone)]
-pub struct MacVideoPipeline {
-    encoded_tx: broadcast::Sender<EncodedAccessUnit>,
-    stats: Arc<PipelineStats>,
-    latest_access_unit: Arc<Mutex<Option<EncodedAccessUnit>>>,
+pub(crate) struct MacosScreenConfig {
+    display_id: u32,
+    fps: i32,
+    max_width: i32,
+    target_average_bitrate_bps: i32,
 }
 
-#[derive(Default)]
-struct PipelineStats {
-    pipeline_ready: AtomicBool,
-    raw_frames: AtomicU64,
-    encode_attempts: AtomicU64,
-    encoded_frames: AtomicU64,
-    dropped_frames: AtomicU64,
-    last_raw_frame_at_ms: AtomicU64,
-    last_encode_attempt_at_ms: AtomicU64,
-    last_encoded_at_ms: AtomicU64,
-    last_error: Mutex<Option<String>>,
-}
-
-pub struct PipelineHealth {
-    pub pipeline_ready: bool,
-    pub raw_frames: u64,
-    pub encode_attempts: u64,
-    pub encoded_frames: u64,
-    pub dropped_frames: u64,
-    pub last_raw_frame_at_ms: u64,
-    pub last_encode_attempt_at_ms: u64,
-    pub last_encoded_at_ms: u64,
-    pub last_error: Option<String>,
-}
-
-pub struct PipelineConfig {
-    pub display_id: u32,
-    pub fps: i32,
-    pub max_width: i32,
-    pub target_average_bitrate_bps: i32,
-}
-
-impl PipelineConfig {
-    fn from_env() -> Self {
+impl MacosScreenConfig {
+    pub(crate) fn from_env() -> Self {
         Self {
             display_id: env_i32("POC_DISPLAY_ID", 0).max(0) as u32,
-            fps: env_i32("POC_FPS", TARGET_FPS).max(1),
-            max_width: env_i32("POC_MAX_WIDTH", MAX_STREAM_WIDTH).max(320),
+            fps: env_i32("POC_FPS", DEFAULT_TARGET_FPS).max(1),
+            max_width: env_i32("POC_MAX_WIDTH", DEFAULT_MAX_STREAM_WIDTH).max(320),
             target_average_bitrate_bps: env_i32(
                 "POC_TARGET_BITRATE_BPS",
-                TARGET_AVERAGE_BITRATE_BPS,
+                DEFAULT_TARGET_AVERAGE_BITRATE_BPS,
             )
             .max(500_000),
         }
     }
 }
 
-impl MacVideoPipeline {
-    pub fn start_default() -> Result<Self, String> {
-        Self::start(PipelineConfig::from_env())
-    }
-
-    pub fn start(config: PipelineConfig) -> Result<Self, String> {
-        let (encoded_tx, _) = broadcast::channel::<EncodedAccessUnit>(STARTUP_CHANNEL_CAPACITY);
-        let stats = Arc::new(PipelineStats::default());
-        let latest_access_unit = Arc::new(Mutex::new(None));
-        spawn_native_pipeline_thread(
-            config,
-            encoded_tx.clone(),
-            Arc::clone(&stats),
-            Arc::clone(&latest_access_unit),
-        );
-        Ok(Self {
-            encoded_tx,
-            stats,
-            latest_access_unit,
-        })
-    }
-
-    pub fn subscribe(
-        &self,
-    ) -> (
-        broadcast::Receiver<EncodedAccessUnit>,
-        Option<EncodedAccessUnit>,
-    ) {
-        let snapshot = self
-            .latest_access_unit
-            .lock()
-            .map(|guard| guard.clone())
-            .unwrap_or_else(|poisoned| poisoned.into_inner().clone());
-        (self.encoded_tx.subscribe(), snapshot)
-    }
-
-    pub fn health(&self) -> PipelineHealth {
-        PipelineHealth {
-            pipeline_ready: self.stats.pipeline_ready.load(Ordering::Relaxed),
-            raw_frames: self.stats.raw_frames.load(Ordering::Relaxed),
-            encode_attempts: self.stats.encode_attempts.load(Ordering::Relaxed),
-            encoded_frames: self.stats.encoded_frames.load(Ordering::Relaxed),
-            dropped_frames: self.stats.dropped_frames.load(Ordering::Relaxed),
-            last_raw_frame_at_ms: self.stats.last_raw_frame_at_ms.load(Ordering::Relaxed),
-            last_encode_attempt_at_ms: self.stats.last_encode_attempt_at_ms.load(Ordering::Relaxed),
-            last_encoded_at_ms: self.stats.last_encoded_at_ms.load(Ordering::Relaxed),
-            last_error: self
-                .stats
-                .last_error
-                .lock()
-                .map(|guard| guard.clone())
-                .unwrap_or_else(|poisoned| poisoned.into_inner().clone()),
-        }
-    }
-}
-
-fn spawn_native_pipeline_thread(
-    config: PipelineConfig,
+pub(crate) fn spawn(
+    config: MacosScreenConfig,
     encoded_tx: broadcast::Sender<EncodedAccessUnit>,
     stats: Arc<PipelineStats>,
     latest_access_unit: Arc<Mutex<Option<EncodedAccessUnit>>>,
 ) {
     std::thread::spawn(move || {
-        if let Err(err) = run_native_pipeline(
+        if let Err(err) = run(
             config,
             encoded_tx,
             Arc::clone(&stats),
@@ -172,8 +82,8 @@ fn spawn_native_pipeline_thread(
     });
 }
 
-fn run_native_pipeline(
-    config: PipelineConfig,
+fn run(
+    config: MacosScreenConfig,
     encoded_tx: broadcast::Sender<EncodedAccessUnit>,
     stats: Arc<PipelineStats>,
     latest_access_unit: Arc<Mutex<Option<EncodedAccessUnit>>>,
@@ -473,13 +383,6 @@ unsafe extern "C-unwind" fn video_toolbox_output_callback(
     }
 }
 
-fn now_unix_ms() -> u64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|duration| duration.as_millis() as u64)
-        .unwrap_or(0)
-}
-
 struct FrameStreamOutputIvars {
     sample_tx: mpsc::SyncSender<usize>,
     stats: Arc<PipelineStats>,
@@ -693,11 +596,4 @@ fn drop_retained<T: objc2::Message>(value: usize) {
 fn cfr_retained_from_usize<T: Type>(value: usize) -> Option<CFRetained<T>> {
     let ptr = NonNull::new(value as *mut T)?;
     Some(unsafe { CFRetained::from_raw(ptr) })
-}
-
-fn env_i32(name: &str, default: i32) -> i32 {
-    std::env::var(name)
-        .ok()
-        .and_then(|value| value.parse::<i32>().ok())
-        .unwrap_or(default)
 }
