@@ -1,6 +1,6 @@
 use std::{
-    ptr::NonNull,
     ptr,
+    ptr::NonNull,
     sync::{
         atomic::{AtomicBool, AtomicU64, Ordering},
         mpsc, Arc, Mutex,
@@ -13,7 +13,9 @@ use dispatch2::{DispatchQueue, DispatchQueueAttr};
 use objc2::rc::Retained;
 use objc2::runtime::{NSObject, ProtocolObject};
 use objc2::{define_class, msg_send, AnyThread, DefinedClass};
-use objc2_core_foundation::{CFBoolean, CFDictionary, CFNumber, CFRetained, CFString, CFType, Type};
+use objc2_core_foundation::{
+    CFBoolean, CFDictionary, CFNumber, CFRetained, CFString, CFType, Type,
+};
 use objc2_core_media::{kCMTimeInvalid, kCMVideoCodecType_H264, CMSampleBuffer, CMTime};
 use objc2_core_video::{kCVPixelFormatType_32BGRA, CVImageBuffer};
 use objc2_foundation::{NSArray, NSError, NSObjectProtocol};
@@ -22,13 +24,12 @@ use objc2_screen_capture_kit::{
     SCStreamOutput, SCStreamOutputType,
 };
 use objc2_video_toolbox::{
-    kVTPropertyNotSupportedErr,
     kVTCompressionPropertyKey_AllowFrameReordering, kVTCompressionPropertyKey_AverageBitRate,
     kVTCompressionPropertyKey_ExpectedFrameRate, kVTCompressionPropertyKey_MaxFrameDelayCount,
     kVTCompressionPropertyKey_MaxKeyFrameInterval, kVTCompressionPropertyKey_ProfileLevel,
     kVTCompressionPropertyKey_RealTime, kVTProfileLevel_H264_Baseline_AutoLevel,
-    kVTVideoEncoderSpecification_EnableHardwareAcceleratedVideoEncoder, VTCompressionSession,
-    VTEncodeInfoFlags, VTSessionSetProperty,
+    kVTPropertyNotSupportedErr, kVTVideoEncoderSpecification_EnableHardwareAcceleratedVideoEncoder,
+    VTCompressionSession, VTEncodeInfoFlags, VTSessionSetProperty,
 };
 use tokio::sync::broadcast;
 
@@ -116,7 +117,12 @@ impl MacVideoPipeline {
         })
     }
 
-    pub fn subscribe(&self) -> (broadcast::Receiver<EncodedAccessUnit>, Option<EncodedAccessUnit>) {
+    pub fn subscribe(
+        &self,
+    ) -> (
+        broadcast::Receiver<EncodedAccessUnit>,
+        Option<EncodedAccessUnit>,
+    ) {
         let snapshot = self
             .latest_access_unit
             .lock()
@@ -133,10 +139,7 @@ impl MacVideoPipeline {
             encoded_frames: self.stats.encoded_frames.load(Ordering::Relaxed),
             dropped_frames: self.stats.dropped_frames.load(Ordering::Relaxed),
             last_raw_frame_at_ms: self.stats.last_raw_frame_at_ms.load(Ordering::Relaxed),
-            last_encode_attempt_at_ms: self
-                .stats
-                .last_encode_attempt_at_ms
-                .load(Ordering::Relaxed),
+            last_encode_attempt_at_ms: self.stats.last_encode_attempt_at_ms.load(Ordering::Relaxed),
             last_encoded_at_ms: self.stats.last_encoded_at_ms.load(Ordering::Relaxed),
             last_error: self
                 .stats
@@ -237,7 +240,8 @@ fn run_native_pipeline(
             Ok(sample_buffer_ptr) => sample_buffer_ptr,
             Err(_) => return Err("sample buffer channel closed".to_string()),
         };
-        let Some(sample_buffer) = cfr_retained_from_usize::<CMSampleBuffer>(sample_buffer_ptr) else {
+        let Some(sample_buffer) = cfr_retained_from_usize::<CMSampleBuffer>(sample_buffer_ptr)
+        else {
             continue;
         };
         let Some(image_buffer) = (unsafe { sample_buffer.image_buffer() }) else {
@@ -456,10 +460,10 @@ unsafe extern "C-unwind" fn video_toolbox_output_callback(
                 .stats
                 .encoded_frames
                 .fetch_add(1, Ordering::Relaxed);
-            output_ctx.stats.last_encoded_at_ms.store(
-                now_unix_ms(),
-                Ordering::Relaxed,
-            );
+            output_ctx
+                .stats
+                .last_encoded_at_ms
+                .store(now_unix_ms(), Ordering::Relaxed);
         }
         Err(err) => {
             if let Ok(mut last_error) = output_ctx.stats.last_error.lock() {
@@ -505,7 +509,10 @@ define_class!(
             if unsafe { !sample_buffer.data_is_ready() } {
                 return;
             }
-            self.ivars().stats.raw_frames.fetch_add(1, Ordering::Relaxed);
+            self.ivars()
+                .stats
+                .raw_frames
+                .fetch_add(1, Ordering::Relaxed);
             self.ivars()
                 .stats
                 .last_raw_frame_at_ms
@@ -513,7 +520,10 @@ define_class!(
 
             let sample_buffer_ptr = CFRetained::into_raw(sample_buffer.retain()).as_ptr() as usize;
             if self.ivars().sample_tx.try_send(sample_buffer_ptr).is_err() {
-                self.ivars().stats.dropped_frames.fetch_add(1, Ordering::Relaxed);
+                self.ivars()
+                    .stats
+                    .dropped_frames
+                    .fetch_add(1, Ordering::Relaxed);
                 drop(cfr_retained_from_usize::<CMSampleBuffer>(sample_buffer_ptr));
             }
         }
@@ -522,10 +532,7 @@ define_class!(
 
 impl FrameStreamOutput {
     fn new(sample_tx: mpsc::SyncSender<usize>, stats: Arc<PipelineStats>) -> Retained<Self> {
-        let this = Self::alloc().set_ivars(FrameStreamOutputIvars {
-            sample_tx,
-            stats,
-        });
+        let this = Self::alloc().set_ivars(FrameStreamOutputIvars { sample_tx, stats });
         unsafe { msg_send![super(this), init] }
     }
 }
@@ -538,9 +545,7 @@ fn set_required_session_property(
 ) -> Result<(), String> {
     let status = unsafe { VTSessionSetProperty(session.as_ref(), key, Some(value)) };
     if status != 0 {
-        return Err(format!(
-            "VTSessionSetProperty failed for {label}: {status}"
-        ));
+        return Err(format!("VTSessionSetProperty failed for {label}: {status}"));
     }
     Ok(())
 }
@@ -557,15 +562,11 @@ fn set_optional_session_property(
     }
 
     if status == kVTPropertyNotSupportedErr {
-        eprintln!(
-            "macos-webrtc-h264: VideoToolbox property not supported, skipping {label}"
-        );
+        eprintln!("macos-webrtc-h264: VideoToolbox property not supported, skipping {label}");
         return;
     }
 
-    eprintln!(
-        "macos-webrtc-h264: VTSessionSetProperty failed for optional {label}: {status}"
-    );
+    eprintln!("macos-webrtc-h264: VTSessionSetProperty failed for optional {label}: {status}");
 }
 
 fn load_shareable_content() -> Result<Retained<SCShareableContent>, String> {
@@ -663,12 +664,10 @@ fn start_stream_capture(stream: &SCStream) -> Result<(), String> {
         stream.startCaptureWithCompletionHandler(Some(&completion));
     }
 
-    let error_ptr = rx
-        .recv_timeout(SCREEN_CAPTURE_KIT_TIMEOUT)
-        .map_err(|_| {
-            "SCStream start timed out; check macOS screen-recording permission and capture approval"
-                .to_string()
-        })?;
+    let error_ptr = rx.recv_timeout(SCREEN_CAPTURE_KIT_TIMEOUT).map_err(|_| {
+        "SCStream start timed out; check macOS screen-recording permission and capture approval"
+            .to_string()
+    })?;
     if error_ptr != 0 {
         drop_retained::<NSError>(error_ptr);
         return Err("SCStream start failed".to_string());

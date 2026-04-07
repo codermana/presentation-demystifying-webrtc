@@ -1,13 +1,34 @@
 use std::sync::Arc;
 
-use axum::{extract::State, response::Html, Json};
+use axum::{
+    extract::State,
+    http::StatusCode,
+    response::{Html, IntoResponse, Response},
+    routing::{get, post},
+    Json, Router,
+};
 use serde::{Deserialize, Serialize};
+use tokio::net::TcpListener;
 
 use crate::{pipeline::MacVideoPipeline, webrtc_sender::accept_offer};
 
 #[derive(Clone)]
 pub struct AppState {
     pub pipeline: Arc<MacVideoPipeline>,
+}
+
+pub struct ServerConfig {
+    pub bind_addr: std::net::SocketAddr,
+}
+
+impl ServerConfig {
+    pub fn from_env() -> Result<Self, String> {
+        let bind_addr = std::env::var("POC_SERVER_ADDR")
+            .unwrap_or_else(|_| "0.0.0.0:4060".to_string())
+            .parse()
+            .map_err(|err| format!("invalid bind addr: {err}"))?;
+        Ok(Self { bind_addr })
+    }
 }
 
 #[derive(Serialize)]
@@ -34,6 +55,26 @@ pub struct SessionAnswer {
     pub sdp: String,
 }
 
+pub async fn run_server(config: ServerConfig, state: AppState) -> Result<(), String> {
+    let listener = TcpListener::bind(config.bind_addr)
+        .await
+        .map_err(|err| format!("bind failed: {err}"))?;
+    let app = router(state);
+
+    println!("macos-webrtc-h264 listening on http://{}", config.bind_addr);
+    axum::serve(listener, app)
+        .await
+        .map_err(|err| format!("server failed: {err}"))
+}
+
+fn router(state: AppState) -> Router {
+    Router::new()
+        .route("/", get(index_handler))
+        .route("/health", get(health_handler))
+        .route("/session", post(create_session_handler))
+        .with_state(state)
+}
+
 pub async fn index_handler() -> Html<&'static str> {
     Html(INDEX_HTML)
 }
@@ -57,12 +98,32 @@ pub async fn health_handler(State(state): State<AppState>) -> Json<HealthRespons
 pub async fn create_session_handler(
     State(state): State<AppState>,
     Json(offer): Json<SessionOffer>,
-) -> Result<Json<SessionAnswer>, (axum::http::StatusCode, String)> {
+) -> Result<Json<SessionAnswer>, AppError> {
     let (encoded_rx, initial_access_unit) = state.pipeline.subscribe();
     let sdp = accept_offer(encoded_rx, initial_access_unit, offer.sdp)
         .await
-        .map_err(|err| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, err))?;
+        .map_err(AppError::internal)?;
     Ok(Json(SessionAnswer { sdp }))
+}
+
+pub struct AppError {
+    status: StatusCode,
+    message: String,
+}
+
+impl AppError {
+    fn internal(message: String) -> Self {
+        Self {
+            status: StatusCode::INTERNAL_SERVER_ERROR,
+            message,
+        }
+    }
+}
+
+impl IntoResponse for AppError {
+    fn into_response(self) -> Response {
+        (self.status, self.message).into_response()
+    }
 }
 
 const INDEX_HTML: &str = r##"<!doctype html>

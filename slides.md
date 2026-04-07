@@ -144,4 +144,4 @@ Code
 https://github.com/CoderMana/presentation-demystifying-webrtc
 
 Slides
-https://demystifying-webrtc.slides.CoderMana.com
+https://demystifying-webrtc.slides.algogrit.com
