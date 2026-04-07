@@ -6,7 +6,7 @@ layout: true
 
 class: center, middle
 
-# {title}
+# Demystifying WebRTC
 
 Gaurav Agarwal
 
@@ -141,7 +141,7 @@ func main() {
 class: center, middle
 
 Code
-https://github.com/base-org/presentation-template
+https://github.com/CoderMana/presentation-demystifying-webrtc
 
 Slides
-https://template.slides.base-org.com
+https://demystifying-webrtc.slides.CoderMana.com
