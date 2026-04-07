@@ -1,0 +1,22 @@
+[package]
+name = "macos-webrtc-h264"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+axum = { version = "0.7", features = ["json"] }
+block2 = { version = "0.6.2", features = ["alloc"] }
+bytes = "1"
+dispatch2 = { version = "0.3.1", features = ["alloc", "objc2"] }
+http = "1"
+objc2 = { version = "0.6.2", features = ["std"] }
+objc2-core-foundation = { version = "0.3.2", features = ["CFArray", "CFData", "CFDictionary", "CFNumber", "CFString"] }
+objc2-core-media = { version = "0.3.2", features = ["CMBlockBuffer", "CMSampleBuffer", "CMFormatDescription", "CMTime"] }
+objc2-core-video = { version = "0.3.2", features = ["CVBase", "CVBuffer", "CVImageBuffer", "CVPixelBuffer", "CVReturn"] }
+objc2-foundation = { version = "0.3.2", features = ["NSArray", "NSError"] }
+objc2-screen-capture-kit = "0.3.2"
+objc2-video-toolbox = { version = "0.3.2", features = ["VTCompressionSession", "VTErrors", "objc2-core-media", "objc2-core-video"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["macros", "net", "rt-multi-thread", "signal", "sync", "time"] }
+webrtc = "0.8.0"
