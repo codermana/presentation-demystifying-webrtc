@@ -12,10 +12,6 @@ Gaurav Agarwal
 
 ---
 
-# Agenda
-
----
-
 class: center, middle
 
 ![Me](assets/images/me.png)
@@ -27,114 +23,141 @@ Director of Engineering & Founder @ https://codermana.com
 ex-Tarka Labs, ex-BrowserStack, ex-ThoughtWorks
 
 ---
-
 class: center, middle
 
-*What we wanted*
-
-![In-class Training](assets/images/professional-training-courses.jpg)
-
----
-
-class: center, middle
-
-*What we got*
-
-![WFH](assets/images/wfh.jpg)
-
----
-
-## As an instructor
-
-- I promise to
-
-  - make this class as interactive as possible
-
-  - use as many resources as available to keep you engaged
-
-  - ensure everyone's questions are addressed
-
----
-
-## What I need from you
-
-- Be vocal
-
-  - Let me know if there are any audio/video issues ASAP
-
-  - Feel free to interrupt me and ask me questions
-
-- Be punctual
-
-- Give feedback
-
-- Work on the exercises
-
-- Be *on mute* unless you are speaking
+## Why WebRTC
 
 ---
 class: center, middle
 
-## Class progression
-
-![Learning Curve](assets/images/learning-curve.jpg)
+HTTP and WebSockets are enough for **data**, but not enough by themselves for **good real-time media** like voice, video, or screen sharing.
 
 ---
 class: center, middle
 
-Here you are trying to *learn* something, while here your *brain* is doing you a favor by making sure the learning doesn't stick!
-
----
-
-### Some tips
-
-- Slow down => stop & think
-  - listen for the questions and answer
-
-- Do the exercises
-  - not add-ons; not optional
-
-- There are no dumb questions!
-
-- Drink water. Lots of it!
-
----
-
-### Some tips (continued)
-
-- Take notes
-  - Try: *Repetitive Spaced Out Learning*
-
-- Talk about it out loud
-
-- Listen to your brain
-
-- *Experiment!*
+### Why HTTP is not enough
 
 ---
 class: center, middle
 
-### 📚 Content ` > ` 🕒 Time
+HTTP is request/response.
+
+---
+
+That means:
+
+* client asks, server responds
+
+* each exchange is discrete
+
+---
+
+* it is not built for a continuous low-latency stream
+
+* retries and buffering are usually favored over timeliness
 
 ---
 class: center, middle
 
-## Show of hands
-
-*Yay's - in Chat*
+For media, **late data is often useless**.
 
 ---
 class: center, middle
 
-```golang
-package main
+A video frame that arrives 2 seconds late is worse than a dropped frame.
 
-import "fmt"
+---
+class: center, middle
 
-func main() {
-  fmt.Println("Hello, world!")
-}
-```
+HTTP is generally optimized for correctness and delivery, not “play it now or skip it.”
+
+---
+class: center, middle
+
+### Why WebSockets are still not enough
+
+---
+class: center, middle
+
+WebSockets improve a lot over HTTP because they give you a persistent full-duplex connection.
+
+---
+class: center, middle
+
+That helps for signaling and live app events.
+
+---
+class: center, middle
+
+But raw WebSockets still miss several things real-time media needs.
+
+---
+
+- They usually run over TCP
+
+TCP guarantees ordered delivery. Real-time media often prefers **UDP-like behavior** for actual media transport.
+
+- No built-in jitter handling or timing model
+
+Media packets do not just need to arrive. They need to arrive with usable timing.
+
+---
+
+- No standard support for audio/video codecs and negotiation
+
+WebSockets are just a transport pipe. They do not define a media session model.
+
+- No NAT traversal solution
+
+In real apps, two peers are often behind routers, firewalls, CGNAT, mobile networks, and enterprise networks.
+
+---
+
+- No built-in congestion control tuned for live media
+
+- No standard echo cancellation, A/V sync, device integration, etc.
+
+---
+class: center, middle
+
+### What real-time media usually needs instead
+
+---
+class: center, middle
+
+Real-time media needs a **media transport system**.
+
+---
+
+WebRTC adds the missing pieces:
+
+* UDP-first transport
+* RTP/RTCP style media handling
+* jitter buffers
+* packet loss recovery strategies
+* congestion control
+* codec negotiation
+* NAT traversal via ICE/STUN/TURN
+* encryption
+* A/V synchronization
+* browser and device support
+
+---
+
+* **HTTP** is good for setup, APIs, downloading, buffered streaming
+
+* **WebSockets** are good for signaling, chat, presence, control messages
+
+* **WebRTC** is good for live audio/video/screen media
+
+---
+class: center, middle
+
+## Understanding the RFCs
+
+---
+
+
 
 ---
 
