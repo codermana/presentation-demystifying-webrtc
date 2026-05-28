@@ -174,13 +174,13 @@ WebRTC adds the missing pieces:
 
 ---
 
-<!-- _class: image -->
+<!-- _class: [image, image-credit] -->
 
 ## WebRTC RFCs
 
 ![WebRTC RFCs](assets/images/webrtc-all-rfcs.png)
 
-Content credits: https://webrtcforthecurious.com/docs/01-what-why-and-how/
+https://webrtcforthecurious.com/docs/01-what-why-and-how/
 
 ---
 
