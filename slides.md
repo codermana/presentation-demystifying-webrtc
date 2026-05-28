@@ -156,8 +156,11 @@ class: center, middle
 ## Understanding the RFCs
 
 ---
+class: center, middle
 
+![WebRTC RFCs](assets/images/webrtc-all-rfcs.png)
 
+.content-credits[https://webrtcforthecurious.com/docs/01-what-why-and-how/]
 
 ---
 
