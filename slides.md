@@ -27,11 +27,15 @@ A technical talk explaining why WebRTC exists and what protocols make it work.
 
 ---
 
-<!-- _class: speaker -->
+<!-- _class: cols-photo -->
 
-![bg right:38% w:88%](assets/images/me.png)
+<div class="cols">
+<div class="col-media">
 
-###### Speaker
+![Me](assets/images/me.png)
+
+</div>
+<div class="col-body">
 
 ## Gaurav Agarwal
 
@@ -40,6 +44,9 @@ Software Engineer & Product Developer
 Director of Engineering & Founder @ https://codermana.com
 
 ex-Tarka Labs, ex-BrowserStack, ex-ThoughtWorks
+
+</div>
+</div>
 
 ---
 
