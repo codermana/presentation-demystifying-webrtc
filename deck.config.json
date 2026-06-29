@@ -1,0 +1,16 @@
+{
+  "$schema": "./deck.config.schema.json",
+  "isTemplate": false,
+  "eyebrow": "WebRTC",
+  "title": "Demystifying WebRTC",
+  "description": "A technical talk explaining why WebRTC exists and what protocols make it work.",
+  "author": "Gaurav Agarwal",
+  "slug": "demystifying-webrtc",
+  "repository": {
+    "organization": "codermana",
+    "name": "presentation-demystifying-webrtc"
+  },
+  "hosting": {
+    "baseDomain": "slides.algogrit.com"
+  }
+}
