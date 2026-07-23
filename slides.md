@@ -741,6 +741,79 @@ ICE pairs them up, runs connectivity checks, and promotes the best pair. With **
 
 ---
 
+# Mesh Architecture (P2P)
+
+* Every peer connects directly to every other peer.
+* **Pros**: Simple to build, no server infrastructure required, end-to-end encryption.
+* **Cons**: Bandwidth and CPU intensive. If there are N participants, each peer sends (N-1) uplink streams and receives (N-1) downlink streams.
+* Does not scale well past a small group (~4-6 peers).
+
+---
+
+# Mesh Architecture (P2P) Diagram
+
+```mermaid
+graph LR
+    A((Peer A)) <--> B((Peer B))
+    A <--> C((Peer C))
+    A <--> D((Peer D))
+    B <--> C
+    B <--> D
+    C <--> D
+```
+
+---
+
+# SFU (Selective Forwarding Unit)
+
+* A server that receives streams from each peer and *selectively forwards* them to the others.
+* Each peer sends only **one** uplink stream (or a few simulcast layers) to the server.
+* The server acts as a smart router, not a media processor.
+* **Pros**: Highly scalable for bandwidth (reduces uplink drastically).
+* **Cons**: Requires server infrastructure; clients still have to decode multiple incoming streams.
+
+---
+
+# SFU (Selective Forwarding Unit) Diagram
+
+```mermaid
+graph LR
+    S((SFU Server))
+    A(Peer A) -->|1 Stream| S
+    B(Peer B) -->|1 Stream| S
+    C(Peer C) -->|1 Stream| S
+    
+    S -->|Stream B, C| A
+    S -->|Stream A, C| B
+    S -->|Stream A, B| C
+```
+
+---
+
+# MCU (Multipoint Control Unit)
+
+* A centralized server that receives all streams, decodes them, *mixes* them into a single composite stream (audio/video), re-encodes, and sends it out.
+* **Pros**: Extremely low bandwidth and CPU requirement for the client (receives and decodes only 1 stream).
+* **Cons**: Highly CPU-intensive for the server, introduces latency, and breaks end-to-end encryption.
+
+---
+
+# MCU (Multipoint Control Unit) Diagram
+
+```mermaid
+graph LR
+    M((MCU Server))
+    A(Peer A) -->|1 Stream| M
+    B(Peer B) -->|1 Stream| M
+    C(Peer C) -->|1 Stream| M
+    
+    M -->|Mixed Stream| A
+    M -->|Mixed Stream| B
+    M -->|Mixed Stream| C
+```
+
+---
+
 <!-- _class: cards -->
 
 # Mesh vs SFU vs MCU
