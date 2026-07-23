@@ -24,3 +24,7 @@ node_modules/
 dist/
 screenshots/
 themes/base.css
+
+### Mermaid build artifacts ###
+test-mermaid.md
+assets/generated/
